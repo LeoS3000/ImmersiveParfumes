@@ -1,12 +1,12 @@
-import React, { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import {
   useGLTF,
   useAnimations,
   MeshTransmissionMaterial,
-  shaderMaterial,
   useTexture,
+  PositionalAudio,
 } from "@react-three/drei"; // Added useTexture
-import { useThree, useFrame, extend } from "@react-three/fiber"; // Added extend
+import { useThree, useFrame } from "@react-three/fiber"; // Added extend
 import { useDrag } from "@use-gesture/react";
 import * as THREE from "three";
 import { GpuPerfumeSpray } from "./GpuPerfumeSpray";
@@ -14,11 +14,13 @@ import { GpuPerfumeSpray } from "./GpuPerfumeSpray";
 // import { PerfumeLiquidMaterial } from './liquidMaterial'
 import { LiquidShaderMaterial } from "./liquidMaterial"; // Import the new material
 
-export function Ocean(props) {
+export function PerfumeBottle(props) {
   const group = useRef();
   const { nodes, materials, animations } = useGLTF("/models/ocean.glb");
   const { actions, names: animationNames } = useAnimations(animations, group);
   const liquidMaterialRef = useRef(); // Ref for the custom shader material
+  const sprayRef = useRef();   
+  const capPopRef = useRef();
   const [roughnessMapCapBase, roughnessMapCap, roughnessMapNozzle] = useTexture(
     [
       "textures/RoughnessMapCapBase.png",
@@ -64,7 +66,7 @@ export function Ocean(props) {
     bg: "#839681",
   };
 
-  const { initialRotation = [0, 0, 0], ...restProps } = props;
+  const { initialRotation = [0, 0, 0], onNozzleClick, ...restProps } = props;
   const [rotation, setRotation] = useState(initialRotation);
   const { size, gl } = useThree();
   const perfumeSprayRef = useRef();
@@ -116,6 +118,9 @@ export function Ocean(props) {
     if (CapPopAction) {
       CapPopAction.setLoop(THREE.LoopOnce);
       CapPopAction.clampWhenFinished = true;
+      if (capPopRef.current && typeof capPopRef.current.play === "function") {
+      capPopRef.current.play();
+    }
     }
   }, [actions.CapPop]);
 
@@ -178,6 +183,14 @@ export function Ocean(props) {
       }
     } else {
       console.warn('"Spray" animation action not found when trying to play.');
+    }
+    if (sprayRef.current && typeof sprayRef.current.play === "function") {
+      sprayRef.current.play();
+    }
+
+    if (typeof onNozzleClick === "function") {
+      onNozzleClick(event);
+      console.log("test");
     }
   };
 
@@ -244,16 +257,22 @@ export function Ocean(props) {
           scale={[0.236, 0.317, 0.236]}
           onPointerDown={handleNozzleClick}
         >
-          <mesh
-            name="Cylinder.002"
-            geometry={nodes.Mesh_3.geometry}
-          >
+          <mesh name="Cylinder.002" geometry={nodes.Mesh_3.geometry}>
             <meshStandardMaterial
-            metalness={1.0}
-            color={"#E7E7E7"}
-            roughnessMap={roughnessMapCap}
+              metalness={1.0}
+              color={"#E7E7E7"}
+              roughnessMap={roughnessMapCap}
+            />
+          </mesh>
+          <PositionalAudio
+            ref={sprayRef}                // 5) Tie it to our ref
+            url="./sounds/Spray.mp3"        // 6) Path to your audio file
+            distance={5}                  // fall-off distance
+            loop={false}                  // don’t loop; just play once per click
+            autoplay={false}              // we’ll call .play() manually
+            volume={1}                  // adjust as needed (0–1)
+            playbackRate={1}
           />
-            </mesh>
           <group rotation={[-Math.PI / 2, 0, 0]}>
             <GpuPerfumeSpray
               ref={perfumeSprayRef}
@@ -282,6 +301,15 @@ export function Ocean(props) {
             roughnessMap={roughnessMapCap}
           />
         </mesh>
+            <PositionalAudio
+            ref={capPopRef}                // 5) Tie it to our ref
+            url="./sounds/CapPop.mp3"        // 6) Path to your audio file
+            distance={5}                  // fall-off distance
+            loop={false}                  // don’t loop; just play once per click
+            autoplay={false}              // we’ll call .play() manually
+            volume={1}                  // adjust as needed (0–1)
+            playbackRate={1}
+          />
       </group>
     </group>
   );

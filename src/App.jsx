@@ -60,8 +60,8 @@ function App() {
     </>,
 
   ];
-    const scentDescriptions = [
-      "Discover your new scent",
+  const scentDescriptions = [
+    "Discover your new scent",
     "A delicate bouquet of fresh spring flowers, evoking a sense of renewal and light.",
     "The sweet and succulent aroma of ripe peaches, bursting with juicy sunshine.",
     "The rich and grounding aroma of ancient woods, wrapping you in a warm, earthy embrace that evokes deep tranquility.",
@@ -101,7 +101,7 @@ function App() {
   }, []); // Empty dependency array ensures this runs once on mount
 
   return (
-    <Canvas shadows camera={{ position: [15, 9, 15], fov: 35 }}>
+    <Canvas shadows camera={{ position: [15, 9, 15], fov: 35, rotation: [Math.PI * 1, Math.PI * 1, 0] }}>
       {/* Ambient Light for the scene */}
       {/* SpotLights for dynamic lighting */}
       <spotLight
@@ -139,7 +139,7 @@ function App() {
           depthWrite={false}
         />
       </Text>
-      
+
       {/* Main scene elements */}
       <BBOW />
       <group position={[3, 0, 3]} rotation={[0, Math.PI * 1.2, 0]}>
@@ -148,11 +148,11 @@ function App() {
         </Center>
 
         {scents.map((scent, i) => (
-          <Float speed={1} rotationIntensity={2} floatIntensity={1}>
-            <AnimatedGroup key={i} active={i === index} fromY={-10} toY={2}>
+          <AnimatedGroup key={i} active={i === index} fromY={-10} toY={2}>
+            <Float speed={1} rotationIntensity={2} floatIntensity={1}>
               {scent}
-            </AnimatedGroup>
-          </Float>
+            </Float>
+          </AnimatedGroup>
         ))}
 
         <AccumulativeShadows

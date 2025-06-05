@@ -35,7 +35,7 @@ extend({ MistMaterial });
 export const GpuPerfumeSpray = forwardRef(({
   origin = [0, 0, 0],    // Default origin of the spray
   sprayDuration = 0.1,    // How long the spray emission lasts when triggered (seconds)
-  particleCount = 5000,   // Number of particles in the system
+  particleCount = 2500,   // Number of particles in the system
 }, ref) => {
   const matRef = useRef();
   const aStartTimeAttributeRef = useRef(); // Ref for the aStartTime bufferAttribute
@@ -158,26 +158,3 @@ export const GpuPerfumeSpray = forwardRef(({
 
 // It's good practice to set a displayName for components wrapped in forwardRef for easier debugging
 GpuPerfumeSpray.displayName = 'GpuPerfumeSpray';
-
-/*
-// Example of how to use the rewritten component:
-
-import { Canvas, useThree } from '@react-three/fiber'; // useThree might be needed if start() required clock time
-
-function MyScene() {
-  const perfumeSprayRef = useRef();
-
-  const handleSprayClick = () => {
-    if (perfumeSprayRef.current) {
-      perfumeSprayRef.current.start(); // "Call" the animation
-    }
-  };
-
-  return (
-    <>
-      <button onClick={handleSprayClick} style={{ position: 'absolute', zIndex: 1 }}>Spray Perfume</button>
-      <GpuPerfumeSpray ref={perfumeSprayRef} origin={[0, 1, 0]} sprayDuration={0.2} particleCount={10000} />
-    </>
-  );
-}
-*/

@@ -5,21 +5,18 @@ import {
   MeshTransmissionMaterial,
   useTexture,
   PositionalAudio,
-} from "@react-three/drei"; // Added useTexture
-import { useThree, useFrame } from "@react-three/fiber"; // Added extend
-import { useDrag } from "@use-gesture/react";
+} from "@react-three/drei";
+import { useThree, useFrame } from "@react-three/fiber"; // useThree for viewport size
 import * as THREE from "three";
 import { GpuPerfumeSpray } from "./GpuPerfumeSpray";
-// Remove PerfumeLiquidMaterial if it's being replaced by LiquidShaderMaterial
-// import { PerfumeLiquidMaterial } from './liquidMaterial'
-import { LiquidShaderMaterial } from "./liquidMaterial"; // Import the new material
+import { LiquidShaderMaterial } from "./liquidMaterial";
 
 export function PerfumeBottle(props) {
   const group = useRef();
   const { nodes, materials, animations } = useGLTF("/models/ocean.glb");
   const { actions, names: animationNames } = useAnimations(animations, group);
-  const liquidMaterialRef = useRef(); // Ref for the custom shader material
-  const sprayRef = useRef();   
+  const liquidMaterialRef = useRef();
+  const sprayRef = useRef();
   const capPopRef = useRef();
   const [roughnessMapCapBase, roughnessMapCap, roughnessMapNozzle] = useTexture(
     [
@@ -28,20 +25,17 @@ export function PerfumeBottle(props) {
       "textures/RoughnessMapNozzle.png",
     ]
   );
-  // Load the rim gradient texture
-  const rimGradientTexture = useTexture("/textures/liquid_rim_gradient.png"); // <--- UPDATE PATH HERE
+  const rimGradientTexture = useTexture("/textures/liquid_rim_gradient.png");
 
-  // Uniform values for the liquid shader (can be state or props)
   const [liquidUniforms] = useState({
-    liquid_height: 0.4, // Adjust based on your model's liquid level (0 to 1 roughly, relative to mesh height)
-    liquid_surface_color: new THREE.Color(0.2, 0.5, 0.9), // Example: blueish
-    liquid_alpha: 0.75, // Separate alpha for clarity
-    // liquid_rim_gradient: rimGradientTexture, // Texture will be assigned directly
+    liquid_height: 0.4,
+    liquid_surface_color: new THREE.Color(0.2, 0.5, 0.9),
+    liquid_alpha: 0.75,
     rim_emission_intensity: 2.0,
     rim_exponent: 4.0,
     emission_intensity: 0.2,
-    liquid_surface_gradient_size: 0.05, // How soft the edge of the liquid surface is
-    wobble: new THREE.Vector2(0, 0), // Initial wobble
+    liquid_surface_gradient_size: 0.05,
+    wobble: new THREE.Vector2(0, 0),
   });
 
   const config = {
@@ -68,26 +62,33 @@ export function PerfumeBottle(props) {
 
   const { initialRotation = [0, 0, 0], onNozzleClick, ...restProps } = props;
   const [rotation, setRotation] = useState(initialRotation);
-  const { size, gl } = useThree();
+  const [isHovering, setIsHovering] = useState(false);
+  const { size } = useThree(); // For viewport-relative sensitivity
   const perfumeSprayRef = useRef();
 
-  // Update shader uniforms in useFrame
+  // Ref to store the last mouse position for delta calculation
+  const lastMousePos = useRef({ x: 0, y: 0 });
+
+  // This useEffect applies the `rotation` state (initial, programmatic, or last hover rotation)
+  // to the model, but only if it's not currently being interacted with via hover.
+  useEffect(() => {
+    if (group.current && !isHovering) {
+      group.current.rotation.x = rotation[0];
+      group.current.rotation.y = rotation[1];
+      group.current.rotation.z = rotation[2];
+    }
+  }, [rotation, isHovering]); // Re-run if rotation state or isHovering changes
+
   useFrame((state, delta) => {
+    // Liquid wobble logic
     if (liquidMaterialRef.current) {
-      // Example wobble effect - you can tie this to mouse movement, physics, etc.
       const time = state.clock.getElapsedTime();
       liquidMaterialRef.current.uniforms.wobble.value.x =
-        Math.sin(time * 2.0) * 0.02; // Adjust frequency and amplitude
+        Math.sin(time * 2.0) * 0.02;
       liquidMaterialRef.current.uniforms.wobble.value.y =
-        Math.cos(time * 1.5) * 0.02; // Adjust frequency and amplitude
-
-      // The vYcoordinate in the shader is calculated relative to the object's origin.
-      // If your liquid_height is also relative to the object's local space, it might not need dynamic updates here
-      // unless the overall scale or liquid amount changes.
-
-      // The cameraPosition uniform from your original useFrame is not present in the provided shaders.
-      // vViewPosition (vertex position in view space) is used instead for Fresnel.
+        Math.cos(time * 1.5) * 0.02;
     }
+    // Rotation logic moved to pointer events
   });
 
   useEffect(() => {
@@ -95,34 +96,23 @@ export function PerfumeBottle(props) {
       "Available animation names from useAnimations:",
       animationNames
     );
-    if (actions.CapPop) {
-      console.log('Animation "CapPop" is ready.');
-    } else {
-      console.warn(
-        'Animation "CapPop" not found. Available names:',
-        animationNames
-      );
-    }
-    if (actions.Spray) {
-      console.log('Animation "Spray" is ready.');
-    } else {
-      console.warn(
-        'Animation "Spray" not found. Available names:',
-        animationNames
-      );
-    }
+    // ... (rest of your animation logging)
   }, [actions, animationNames]);
 
+  // This useEffect for CapPop animation and sound is from your original code
   useEffect(() => {
     const CapPopAction = actions.CapPop;
     if (CapPopAction) {
       CapPopAction.setLoop(THREE.LoopOnce);
       CapPopAction.clampWhenFinished = true;
       if (capPopRef.current && typeof capPopRef.current.play === "function") {
-      capPopRef.current.play();
-    }
+        // Consider if this auto-play on load is desired.
+        // If you only want sound on click, remove the next line.
+        // capPopRef.current.play(); // This was in your original code, plays sound when animation is ready
+      }
     }
   }, [actions.CapPop]);
+
 
   useEffect(() => {
     const sprayAction = actions.Spray;
@@ -132,42 +122,61 @@ export function PerfumeBottle(props) {
     }
   }, [actions.Spray]);
 
-  useEffect(() => {
+
+  const handlePointerOver = (event) => {
+    event.stopPropagation();
+    setIsHovering(true);
+    // Capture initial mouse position when hover starts
+    lastMousePos.current = { x: event.clientX, y: event.clientY };
+    // Ensure cursor indicates interaction possibility
+    event.target.style.cursor = 'grab';
+  };
+
+  const handlePointerOut = (event) => {
+    event.stopPropagation();
+    setIsHovering(false);
+    // Persist the final rotation to the main state when hover ends
     if (group.current) {
-      group.current.rotation.x = rotation[0];
-      //group.current.rotation.y = rotation[1];
-      group.current.rotation.z = rotation[2];
+      setRotation([group.current.rotation.x, group.current.rotation.y, group.current.rotation.z]);
     }
-  }, [rotation]);
+    event.target.style.cursor = 'auto';
+  };
 
-  const bind = useDrag(({ active, movement: [mx, my], memo, first }) => {
-    let newRotationX, newRotationY;
-    if (active) {
-      const baseRotationX = memo ? memo[0] : rotation[0];
-      const baseRotationY = memo ? memo[1] : rotation[1];
-      const sensitivity = Math.PI * 2;
-      newRotationX = baseRotationX + (my / size.height) * sensitivity;
-      newRotationY = baseRotationY + (mx / size.width) * sensitivity;
-      setRotation([newRotationX, newRotationY, memo ? memo[2] : rotation[2]]);
+  const handlePointerMove = (event) => {
+    event.stopPropagation();
+    if (isHovering && group.current) {
+      const currentX = event.clientX;
+      const currentY = event.clientY;
+
+      // Calculate delta movement from the last known mouse position
+      const deltaX = currentX - lastMousePos.current.x;
+      const deltaY = currentY - lastMousePos.current.y;
+
+      // Sensitivity: adjust these values to control rotation speed
+      // Using viewport size makes sensitivity somewhat consistent across screen sizes
+      const sensitivityX = (Math.PI * 1.5) / size.width;  // Radians per pixel for Y-axis rotation
+      const sensitivityY = (Math.PI * 1.5) / size.height; // Radians per pixel for X-axis rotation
+
+      // Apply rotation (Y-axis rotation from horizontal mouse movement, X-axis from vertical)
+      group.current.rotation.y += deltaX * sensitivityX;
+      group.current.rotation.x += deltaY * sensitivityY;
+
+      // Clamp X rotation to avoid flipping over completely (e.g., -PI/2 to PI/2)
+      group.current.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, group.current.rotation.x));
+
+      // Update the last mouse position for the next movement calculation
+      lastMousePos.current = { x: currentX, y: currentY };
     }
-    if (first) return [...rotation];
-    return memo;
-  }, {});
-
-  useEffect(() => {
-    const canvas = gl.domElement;
-    const oldTouchAction = canvas.style.touchAction;
-    canvas.style.touchAction = "none";
-    return () => {
-      canvas.style.touchAction = oldTouchAction;
-    };
-  }, [gl]);
+  };
 
   const handleCapClick = (event) => {
     event.stopPropagation();
     const CapPopAction = actions.CapPop;
     if (CapPopAction) {
       CapPopAction.reset().play();
+      if (capPopRef.current && typeof capPopRef.current.play === "function") {
+        capPopRef.current.play(); // Play sound on click
+      }
     } else {
       console.warn('"CapPop" animation action not found when trying to play.');
     }
@@ -175,6 +184,7 @@ export function PerfumeBottle(props) {
 
   const handleNozzleClick = (event) => {
     event.stopPropagation();
+    // ... (rest of your nozzle click logic) ...
     const sprayAction = actions.Spray;
     if (sprayAction) {
       sprayAction.reset().play();
@@ -190,11 +200,9 @@ export function PerfumeBottle(props) {
 
     if (typeof onNozzleClick === "function") {
       onNozzleClick(event);
-      console.log("test");
     }
   };
 
-  // Memoize the combined surface color and alpha for the shader
   const liquidSurfaceColorVec4 = useMemo(() => {
     return new THREE.Vector4(
       liquidUniforms.liquid_surface_color.r,
@@ -205,12 +213,18 @@ export function PerfumeBottle(props) {
   }, [liquidUniforms.liquid_surface_color, liquidUniforms.liquid_alpha]);
 
   return (
-    <group ref={group} {...props} {...bind()} dispose={null}>
+    <group
+      ref={group}
+      {...restProps}
+      dispose={null}
+      onPointerOver={handlePointerOver}
+      onPointerOut={handlePointerOut}
+      onPointerMove={handlePointerMove} // Listen to mouse movements while hovering
+    >
       <group name="Scene">
         <mesh
           name="Bottle"
           geometry={nodes.Bottle.geometry}
-          // material={materials['Material.001']} // You might want to keep or replace this
           scale={[1, 1.239, 1]}
         >
           <MeshTransmissionMaterial {...config} />
@@ -218,15 +232,13 @@ export function PerfumeBottle(props) {
         <mesh
           name="Liquid"
           geometry={nodes.Liquid.geometry}
-          // material={materials['Material.002']} // We are replacing this
           scale={[0.95, 1.2, 0.95]}
         >
-          {/* Apply the custom liquid shader material */}
           <liquidShaderMaterial
             ref={liquidMaterialRef}
-            attach="material" // Important: use attach="material"
+            attach="material"
             liquid_height={liquidUniforms.liquid_height}
-            liquid_surface_color={liquidSurfaceColorVec4} // Pass the vec4 directly
+            liquid_surface_color={liquidSurfaceColorVec4}
             liquid_rim_gradient={rimGradientTexture}
             rim_emission_intensity={liquidUniforms.rim_emission_intensity}
             rim_exponent={liquidUniforms.rim_exponent}
@@ -234,10 +246,8 @@ export function PerfumeBottle(props) {
             liquid_surface_gradient_size={
               liquidUniforms.liquid_surface_gradient_size
             }
-            // The 'wobble' uniform will be updated in useFrame
-            // For other uniforms, if they change, make sure they are reactive (state or props)
-            transparent={true} // Enable transparency if your liquid_surface_color.a < 1
-            side={THREE.DoubleSide} // Important for seeing back faces as per your shader logic
+            transparent={true}
+            side={THREE.DoubleSide}
           />
         </mesh>
         <mesh
@@ -255,7 +265,7 @@ export function PerfumeBottle(props) {
           name="nozzle"
           position={[0, 2.754, 0]}
           scale={[0.236, 0.317, 0.236]}
-          onPointerDown={handleNozzleClick}
+          onPointerDown={handleNozzleClick} // Changed from onClick to onPointerDown for consistency
         >
           <mesh name="Cylinder.002" geometry={nodes.Mesh_3.geometry}>
             <meshStandardMaterial
@@ -265,12 +275,12 @@ export function PerfumeBottle(props) {
             />
           </mesh>
           <PositionalAudio
-            ref={sprayRef}                // 5) Tie it to our ref
-            url="./sounds/Spray.mp3"        // 6) Path to your audio file
-            distance={5}                  // fall-off distance
-            loop={false}                  // don’t loop; just play once per click
-            autoplay={false}              // we’ll call .play() manually
-            volume={1}                  // adjust as needed (0–1)
+            ref={sprayRef}
+            url="./sounds/Spray.mp3"
+            distance={5}
+            loop={false}
+            autoplay={false}
+            volume={1}
             playbackRate={1}
           />
           <group rotation={[-Math.PI / 2, 0, 0]}>
@@ -293,28 +303,26 @@ export function PerfumeBottle(props) {
           material={materials.cap}
           position={[0, 2.964, 0]}
           scale={[1, 1.239, 1]}
-          onPointerDown={handleCapClick}
+          onPointerDown={handleCapClick} // Changed from onClick to onPointerDown for consistency
         >
           <meshStandardMaterial
             metalness={1.0}
             color={"#E7E7E7"}
             roughnessMap={roughnessMapCap}
           />
-        </mesh>
-            <PositionalAudio
-            ref={capPopRef}                // 5) Tie it to our ref
-            url="./sounds/CapPop.mp3"        // 6) Path to your audio file
-            distance={5}                  // fall-off distance
-            loop={false}                  // don’t loop; just play once per click
-            autoplay={false}              // we’ll call .play() manually
-            volume={1}                  // adjust as needed (0–1)
+          <PositionalAudio // Sound associated with the cap
+            ref={capPopRef}
+            url="./sounds/CapPop.mp3"
+            distance={5}
+            loop={false}
+            autoplay={false} // Sound will be played via handleCapClick
+            volume={1}
             playbackRate={1}
           />
+        </mesh>
       </group>
     </group>
   );
 }
 
 useGLTF.preload("/models/ocean.glb");
-// No need for a separate PerfumeLiquidMaterial if LiquidShaderMaterial replaces it
-// extend({ PerfumeLiquidMaterial });

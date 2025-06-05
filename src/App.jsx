@@ -116,7 +116,6 @@ function App() {
         rotation: [Math.PI * 0.2, Math.PI * 0.8, 0]
       }}
     >
-      <CameraLogger />
       <spotLight
         position={[15, 50, 4]}
         angle={0}
@@ -192,7 +191,7 @@ function App() {
         autoRotate
         autoRotateSpeed={0.05}
         makeDefault
-        enableZoom={false}
+        enableZoom={true}
         enablePan={false}
         enableDamping
       />

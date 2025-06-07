@@ -5,14 +5,42 @@ Command: npx gltfjsx@6.5.3 public/models/peach.glb -o src/components/peach.jsx -
 
 import React from 'react'
 import { useGLTF } from '@react-three/drei'
+import { motion } from 'framer-motion-3d';
+import { useMouseMotionTransform } from '../hooks/useMouseMotionTransform';
 
 export function Peach(props) {
-  const { nodes, materials } = useGLTF('/models/peach.glb')
+  const { nodes, materials } = useGLTF('/models/peach.glb');
+  const { mouse, ...rest } = props;
+  // Default values if not provided
+  const basePosition = [2.677, 0.885, -0.408];
+  const baseRotation = [Math.PI / 2, 0, 0];
+  const multiplier = 2.4;
+  // Use provided position/rotation or fallback
+  const position = props.position || basePosition;
+  const rotation = props.rotation || baseRotation;
+
+  // Use reusable motion hook
+  const { positionX, positionY, rotationX, rotationY } = useMouseMotionTransform({
+    mouse,
+    position,
+    rotation,
+    multiplier
+  });
+
   return (
-    <group {...props} dispose={null}>
-      <mesh geometry={nodes.texture_pbr_v128.geometry} material={materials['Material.001']} position={[2.677, 0.885, -0.408]} rotation={[Math.PI / 2, 0, 0]} />
+    <group {...rest} dispose={null}>
+      <motion.mesh
+        geometry={nodes.texture_pbr_v128.geometry}
+        material={materials['Material.001']}
+        position-x={positionX}
+        position-y={positionY}
+        position-z={position[2]}
+        rotation-x={rotationX}
+        rotation-y={rotationY}
+        rotation-z={rotation[2]}
+      />
     </group>
-  )
+  );
 }
 
 useGLTF.preload('/models/peach.glb')

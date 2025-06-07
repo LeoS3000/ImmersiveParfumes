@@ -10,6 +10,7 @@ import { useThree, useFrame } from "@react-three/fiber"; // useThree for viewpor
 import * as THREE from "three";
 import { GpuPerfumeSpray } from "./GpuPerfumeSpray";
 import { LiquidShaderMaterial } from "./liquidMaterial";
+import { motion, useMotionValue, animate } from "framer-motion";
 
 export function PerfumeBottle(props) {
   const group = useRef();
@@ -60,9 +61,12 @@ export function PerfumeBottle(props) {
     bg: "#839681",
   };
 
-  const { initialRotation = [0, 0, 0], onNozzleClick, ...restProps } = props;
-  const [rotation, setRotation] = useState(initialRotation);
+  const { initialRotation = [0, 0, 0], onNozzleClick, onHoverChange, ...restProps } = props;
+  const rotationX = useMotionValue(initialRotation[0]);
+  const rotationY = useMotionValue(initialRotation[1]);
+  const rotationZ = useMotionValue(initialRotation[2]);
   const [isHovering, setIsHovering] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const { size } = useThree(); // For viewport-relative sensitivity
   const perfumeSprayRef = useRef();
 
@@ -73,22 +77,27 @@ export function PerfumeBottle(props) {
   // to the model, but only if it's not currently being interacted with via hover.
   useEffect(() => {
     if (group.current && !isHovering) {
-      group.current.rotation.x = rotation[0];
-      group.current.rotation.y = rotation[1];
-      group.current.rotation.z = rotation[2];
+      group.current.rotation.x = rotationX.get();
+      group.current.rotation.y = rotationY.get();
+      group.current.rotation.z = rotationZ.get();
     }
-  }, [rotation, isHovering]); // Re-run if rotation state or isHovering changes
+  }, [isHovering, rotationX, rotationY, rotationZ]);
 
-  useFrame((state, delta) => {
+  useFrame(() => {
     // Liquid wobble logic
     if (liquidMaterialRef.current) {
-      const time = state.clock.getElapsedTime();
+      const time = performance.now() / 1000;
       liquidMaterialRef.current.uniforms.wobble.value.x =
         Math.sin(time * 2.0) * 0.02;
       liquidMaterialRef.current.uniforms.wobble.value.y =
         Math.cos(time * 1.5) * 0.02;
     }
-    // Rotation logic moved to pointer events
+    // Animate group rotation with Framer Motion values
+    if (group.current) {
+      group.current.rotation.x = rotationX.get();
+      group.current.rotation.y = rotationY.get();
+      group.current.rotation.z = rotationZ.get();
+    }
   });
 
   useEffect(() => {
@@ -123,48 +132,39 @@ export function PerfumeBottle(props) {
   }, [actions.Spray]);
 
 
-  const handlePointerOver = (event) => {
+  const handlePointerDown = (event) => {
     event.stopPropagation();
+    setIsDragging(true);
     setIsHovering(true);
-    // Capture initial mouse position when hover starts
+    if (onHoverChange) onHoverChange(true);
     lastMousePos.current = { x: event.clientX, y: event.clientY };
-    // Ensure cursor indicates interaction possibility
-    event.target.style.cursor = 'grab';
+    event.target.style.cursor = 'grabbing';
   };
 
-  const handlePointerOut = (event) => {
+  const handlePointerUp = (event) => {
     event.stopPropagation();
+    setIsDragging(false);
     setIsHovering(false);
-    // Persist the final rotation to the main state when hover ends
-    if (group.current) {
-      setRotation([group.current.rotation.x, group.current.rotation.y, group.current.rotation.z]);
-    }
+    if (onHoverChange) onHoverChange(false);
     event.target.style.cursor = 'auto';
   };
 
   const handlePointerMove = (event) => {
     event.stopPropagation();
-    if (isHovering && group.current) {
+    if (isDragging && group.current) {
       const currentX = event.clientX;
       const currentY = event.clientY;
-
-      // Calculate delta movement from the last known mouse position
       const deltaX = currentX - lastMousePos.current.x;
       const deltaY = currentY - lastMousePos.current.y;
-
-      // Sensitivity: adjust these values to control rotation speed
-      // Using viewport size makes sensitivity somewhat consistent across screen sizes
-      const sensitivityX = (Math.PI * 1.5) / size.width;  // Radians per pixel for Y-axis rotation
-      const sensitivityY = (Math.PI * 1.5) / size.height; // Radians per pixel for X-axis rotation
-
-      // Apply rotation (Y-axis rotation from horizontal mouse movement, X-axis from vertical)
-      group.current.rotation.y += deltaX * sensitivityX;
-      group.current.rotation.x += deltaY * sensitivityY;
-
-      // Clamp X rotation to avoid flipping over completely (e.g., -PI/2 to PI/2)
-      group.current.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, group.current.rotation.x));
-
-      // Update the last mouse position for the next movement calculation
+      // Increase sensitivity for more responsive rotation
+      const sensitivityX = (Math.PI * 6.0) / size.width;  // Y-axis (horizontal drag)
+      const sensitivityY = (Math.PI * 6.0) / size.height; // X-axis (vertical drag)
+      // Invert deltaY for natural feel
+      let newY = rotationY.get() + deltaX * sensitivityX;
+      let newX = rotationX.get() - deltaY * sensitivityY;
+      // Allow full rotation (no clamp)
+      animate(rotationY, newY, { type: "spring", stiffness: 200, damping: 30 });
+      animate(rotationX, newX, { type: "spring", stiffness: 200, damping: 30 });
       lastMousePos.current = { x: currentX, y: currentY };
     }
   };
@@ -217,9 +217,10 @@ export function PerfumeBottle(props) {
       ref={group}
       {...restProps}
       dispose={null}
-      onPointerOver={handlePointerOver}
-      onPointerOut={handlePointerOut}
-      onPointerMove={handlePointerMove} // Listen to mouse movements while hovering
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerUp}
     >
       <group name="Scene">
         <mesh

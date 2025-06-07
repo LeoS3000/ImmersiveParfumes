@@ -21,6 +21,7 @@
     "postprocessing": "^6.37.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router-dom": "^7.6.2",
     "three": "^0.173.0",
     "tone": "^15.1.22"
   },
